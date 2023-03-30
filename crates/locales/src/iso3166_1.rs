@@ -6,6 +6,7 @@ use std::fs::File;
 const JSON_PATH: &str = "/usr/share/iso-codes/json/iso_3166-1.json";
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct Country {
     alpha_2: String,
     alpha_3: String,

@@ -7,7 +7,6 @@ use std::{
     fs,
     io::{self, Write},
     path::Path,
-    process::Stdio,
 };
 use sys_mount::*;
 use crate::timezones::Region;
@@ -533,6 +532,7 @@ options {2} boot=casper hostname=recovery userfullname=Recovery username=recover
         self.chroot.command("ln", args).arg(region.path()).arg("/etc/timezone").run()
     }
 
+    #[allow(dead_code)]
     pub fn update_initramfs(&self) -> io::Result<()> {
         self.chroot
             .command("update-initramfs", &["-u"])

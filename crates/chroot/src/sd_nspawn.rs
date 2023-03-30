@@ -7,6 +7,7 @@ use std::{
 use crate::command::Command;
 
 /// Defines the location where a `chroot` will be performed, with `systemd-nspawn`.
+#[allow(dead_code)]
 pub struct SystemdNspawn<'a> {
     pub path:   PathBuf,
     clear_envs: bool,

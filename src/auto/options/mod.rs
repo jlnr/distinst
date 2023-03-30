@@ -13,7 +13,6 @@ pub use self::{
 use super::super::*;
 use disk_types::PartitionExt;
 
-use os_release::OS_RELEASE;
 use partition_identity::PartitionID;
 use std::path::PathBuf;
 
@@ -36,7 +35,6 @@ impl InstallOptions {
         let mut alongside_options = Vec::new();
 
         let recovery_option = detect_recovery();
-        let os_release = OS_RELEASE.as_ref().expect("OS_RELEASE fetch failed");
 
         {
             let erase_options = &mut erase_options;
