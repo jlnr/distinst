@@ -1,6 +1,6 @@
 use crate::bootloader::Bootloader;
 mod chroot_conf;
-use self::chroot_conf::ChrootConfigurator;
+pub use self::chroot_conf::ChrootConfigurator;
 use super::{mount_cdrom, mount_efivars};
 use crate::installer::{conf::RecoveryEnv, steps::normalize_os_release_name};
 use crate::chroot::Chroot;

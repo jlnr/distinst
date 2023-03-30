@@ -58,7 +58,7 @@ pub use crate::upgrade::*;
 pub use self::installer::RecoveryEnv;
 
 mod distribution;
-mod installer;
+pub mod installer;
 mod logging;
 mod upgrade;
 

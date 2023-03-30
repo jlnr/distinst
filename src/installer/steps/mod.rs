@@ -1,5 +1,5 @@
 mod bootloader;
-mod configure;
+pub mod configure;
 mod initialize;
 mod partition;
 

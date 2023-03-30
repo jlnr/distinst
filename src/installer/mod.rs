@@ -4,7 +4,7 @@ pub mod traits;
 mod conf;
 mod state;
 
-pub(crate) mod steps;
+pub mod steps;
 
 pub use self::{conf::RecoveryEnv, steps::Step};
 
