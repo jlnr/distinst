@@ -1,6 +1,8 @@
 use crate::chroot::{Chroot, Command};
-use crate::errors::{IoContext, IntoIoResult};
+use crate::errors::{IntoIoResult, IoContext};
 use crate::misc;
+use crate::timezones::Region;
+use crate::Config;
 use partition_identity::PartitionID;
 use proc_mounts::MountList;
 use std::{
@@ -9,8 +11,6 @@ use std::{
     path::Path,
 };
 use sys_mount::*;
-use crate::timezones::Region;
-use crate::Config;
 
 const APT_OPTIONS: &[&str] = &[
     "-o",
@@ -32,7 +32,9 @@ pub struct ChrootConfigurator<'a> {
 }
 
 impl<'a> ChrootConfigurator<'a> {
-    pub fn new(chroot: Chroot<'a>) -> Self { Self { chroot } }
+    pub fn new(chroot: Chroot<'a>) -> Self {
+        Self { chroot }
+    }
 
     /// Install the given packages if they are not already installed.
     pub fn apt_install(&self, packages: &[&str]) -> io::Result<()> {
@@ -64,6 +66,56 @@ impl<'a> ChrootConfigurator<'a> {
             )
             .run()?;
         self.chroot.command("apt-get", &["autoremove", "-y", "--purge"]).run()
+    }
+
+    pub fn apt_update(&self) -> io::Result<()> {
+        self.chroot.command("apt-get", ["update"]).run()
+    }
+
+    pub fn apt_upgrade(&self) -> io::Result<()> {
+        self.chroot.command("apt-get", ["upgrade", "-y", "--allow-downgrades"]).run()
+    }
+
+    /// Add a repotitory(s) to the the chroot environment.
+    pub fn apt_add_repository(&self, repositories: &[(&str, &str, &[&str])]) -> io::Result<()> {
+        for (url, release, components) in repositories {
+            self.chroot
+                .command(
+                    "apt-add-repository",
+                    [
+                        &cascade! {
+                          String::from("deb ");
+                          ..push_str(url);
+                          ..push_str(" ");
+                          ..push_str(release);
+                          ..push_str(" ");
+                          ..push_str(&components.into_iter().fold(String::new(), |acc, component| {
+                            cascade! {
+                              acc;
+                              ..push_str(component);
+                              ..push_str(" ");
+                            }
+                          }));
+                        },
+                        "--yes",
+                    ],
+                )
+                .run()?;
+        }
+        Ok(())
+    }
+
+    pub fn apt_key(&self, paths: &[&str], keyserver: &str, fingerprint: &str) -> io::Result<()> {
+        self.chroot.command("gpg", ["--keyserver", keyserver, "--recv-key", fingerprint]).run()?;
+        for path in paths {
+            self.chroot
+                .command(
+                    "sh",
+                    ["-c", &format!("gpg --batch --yes --export {fingerprint} | tee {path}")],
+                )
+                .run()?;
+        }
+        Ok(())
     }
 
     /// Configure the bootloader on the system.
@@ -168,11 +220,8 @@ impl<'a> ChrootConfigurator<'a> {
     ) -> io::Result<()> {
         // Add the user to the system.
         {
-            const DEFAULT_USERADD_FLAGS: &[&str] = &[
-                "-m",
-                "-G", "adm,sudo,lpadmin",
-                "-s", "/bin/bash"
-            ];
+            const DEFAULT_USERADD_FLAGS: &[&str] =
+                &["-m", "-G", "adm,sudo,lpadmin", "-s", "/bin/bash"];
 
             let mut command = self.chroot.command("useradd", DEFAULT_USERADD_FLAGS);
 
@@ -192,7 +241,8 @@ impl<'a> ChrootConfigurator<'a> {
         // Copy the profile icon to `/var/lib/AccountsService/icons/{user}` and assign that in
         // the config file at `/var/lib/AccountsService/users/{user}`.
         if let Some(path) = profile_icon {
-            let mut dest = self.chroot.path.join(&["var/lib/AccountsService/icons/", user].concat());
+            let mut dest =
+                self.chroot.path.join(&["var/lib/AccountsService/icons/", user].concat());
 
             if fs::copy(&path, &dest).is_err() {
                 let _ = fs::remove_file(&dest);
@@ -201,11 +251,16 @@ impl<'a> ChrootConfigurator<'a> {
 
             dest = self.chroot.path.join(&["var/lib/AccountsService/users/", user].concat());
 
-            if fs::write(&dest, fomat!(
-                "[User]\n"
-                "Icon=/var/lib/AccountsService/icons/" (user) "\n"
-                "SystemAccount=false\n"
-            )).is_err() {
+            if fs::write(
+                &dest,
+                fomat!(
+                    "[User]\n"
+                    "Icon=/var/lib/AccountsService/icons/" (user) "\n"
+                    "SystemAccount=false\n"
+                ),
+            )
+            .is_err()
+            {
                 let _ = fs::remove_file(&dest);
             }
         }
@@ -263,22 +318,26 @@ impl<'a> ChrootConfigurator<'a> {
     pub fn initramfs_disable(&self) -> io::Result<()> {
         info!("symlinking update-initramfs to true for duration of initial setup");
 
-        self.chroot.command("sh", &["-c", "mv /usr/sbin/update-initramfs /usr/sbin/update-initramfs.bak"])
+        self.chroot
+            .command("sh", &["-c", "mv /usr/sbin/update-initramfs /usr/sbin/update-initramfs.bak"])
             .run()
             .with_context(|err| format!("failed to migrate `update-initramfs`: {}", err))?;
 
-        self.chroot.command("sh", &["-c", "ln -s /usr/bin/true /usr/sbin/update-initramfs"])
+        self.chroot
+            .command("sh", &["-c", "ln -s /usr/bin/true /usr/sbin/update-initramfs"])
             .run()
             .with_context(|err| format!("failed to link `true` to `update-initramfs`: {}", err))
     }
 
     pub fn initramfs_reenable(&self) -> io::Result<()> {
         info!("re-enabling update-initramfs");
-        self.chroot.command("sh", &["-c", "rm /usr/sbin/update-initramfs"])
+        self.chroot
+            .command("sh", &["-c", "rm /usr/sbin/update-initramfs"])
             .run()
             .with_context(|err| format!("failed to remove update-initramfs symlink: {}", err))?;
 
-        self.chroot.command("sh", &["-c", "mv /usr/sbin/update-initramfs.bak /usr/sbin/update-initramfs"])
+        self.chroot
+            .command("sh", &["-c", "mv /usr/sbin/update-initramfs.bak /usr/sbin/update-initramfs"])
             .run()
             .with_context(|err| format!("failed to restore backup of update-initramfs: {}", err))
     }
@@ -353,7 +412,6 @@ impl<'a> ChrootConfigurator<'a> {
 
     pub fn netresolve(&self) -> io::Result<()> {
         info!("creating /etc/resolv.conf");
-
 
         let resolvconf = "../run/systemd/resolve/stub-resolv.conf";
         self.chroot.command("ln", &["-sf", resolvconf, "/etc/resolv.conf"]).run()
@@ -443,7 +501,14 @@ impl<'a> ChrootConfigurator<'a> {
             self.chroot
                 .command(
                     "rsync",
-                    &["-KLavc", "--delete-before", "/cdrom/.disk", "/cdrom/dists", "/cdrom/pool", "/recovery"],
+                    &[
+                        "-KLavc",
+                        "--delete-before",
+                        "/cdrom/.disk",
+                        "/cdrom/dists",
+                        "/cdrom/pool",
+                        "/recovery",
+                    ],
                 )
                 .run()?;
 

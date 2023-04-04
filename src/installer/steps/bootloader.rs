@@ -1,6 +1,8 @@
 use crate::chroot::Chroot;
 use crate::disks::{Bootloader, Disks};
 use crate::errors::IoContext;
+use crate::Config;
+use crate::MODIFY_BOOT_ORDER;
 use libc;
 use os_release::OsRelease;
 use std::{
@@ -9,8 +11,6 @@ use std::{
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
 };
-use crate::Config;
-use crate::MODIFY_BOOT_ORDER;
 
 use super::mount_efivars;
 

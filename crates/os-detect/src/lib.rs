@@ -22,25 +22,21 @@ extern crate partition_identity;
 extern crate sys_mount;
 extern crate tempdir;
 
+use os_release::OsRelease;
+use partition_identity::PartitionID;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 use std::path::Path;
-use tempdir::TempDir;
-use os_release::OsRelease;
 use std::path::PathBuf;
-use partition_identity::PartitionID;
 use sys_mount::*;
+use tempdir::TempDir;
 
 /// Describes the OS found on a partition.
 #[derive(Debug, Clone)]
 pub enum OS {
     Windows(String),
-    Linux {
-        info: OsRelease,
-        partitions: Vec<PartitionID>,
-        targets: Vec<PathBuf>,
-    },
-    MacOs(String)
+    Linux { info: OsRelease, partitions: Vec<PartitionID>, targets: Vec<PathBuf> },
+    MacOs(String),
 }
 
 /// Mounts the partition to a temporary directory and checks for the existence of an
@@ -72,9 +68,7 @@ pub fn detect_os_from_path(base: &Path) -> Option<OS> {
         }
     }
 
-    detect_linux(base)
-        .or_else(|| detect_windows(base))
-        .or_else(|| detect_macos(base))
+    detect_linux(base).or_else(|| detect_windows(base)).or_else(|| detect_macos(base))
 }
 
 /// Detect if Linux is installed at the given path.
@@ -93,21 +87,15 @@ pub fn detect_linux(base: &Path) -> Option<OS> {
 
 /// Detect if Mac OS is installed at the given path.
 pub fn detect_macos(base: &Path) -> Option<OS> {
-    open(base.join("etc/os-release"))
-        .ok()
-        .and_then(|file| {
-            parse_plist(BufReader::new(file))
-                .or_else(|| Some("Mac OS (Unknown)".into()))
-                .map(OS::MacOs)
-        })
+    open(base.join("etc/os-release")).ok().and_then(|file| {
+        parse_plist(BufReader::new(file)).or_else(|| Some("Mac OS (Unknown)".into())).map(OS::MacOs)
+    })
 }
 
 /// Detect if Windows is installed at the given path.
 pub fn detect_windows(base: &Path) -> Option<OS> {
     // TODO: More advanced version-specific detection is possible.
-    base.join("Windows/System32/ntoskrnl.exe")
-        .exists()
-        .map(|| OS::Windows("Windows".into()))
+    base.join("Windows/System32/ntoskrnl.exe").exists().map(|| OS::Windows("Windows".into()))
 }
 
 fn find_linux_parts(base: &Path) -> (Vec<PartitionID>, Vec<PathBuf>) {
@@ -182,10 +170,12 @@ fn parse_plist<R: BufRead>(file: R) -> Option<String> {
 }
 
 fn open<P: AsRef<Path>>(path: P) -> io::Result<File> {
-    File::open(&path).map_err(|why| io::Error::new(
-        io::ErrorKind::Other,
-        format!("unable to open file at {:?}: {}", path.as_ref(), why)
-    ))
+    File::open(&path).map_err(|why| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("unable to open file at {:?}: {}", path.as_ref(), why),
+        )
+    })
 }
 
 /// Adds a new map method for boolean types.
@@ -225,9 +215,6 @@ mod tests {
 
     #[test]
     fn mac_plist_parsing() {
-        assert_eq!(
-            parse_plist(Cursor::new(MAC_PLIST)),
-            Some("Mac OS X (10.6.2)".into())
-        );
+        assert_eq!(parse_plist(Cursor::new(MAC_PLIST)), Some("Mac OS X (10.6.2)".into()));
     }
 }

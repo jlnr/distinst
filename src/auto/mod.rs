@@ -47,7 +47,9 @@ pub enum ReinstallError {
 }
 
 impl From<io::Error> for ReinstallError {
-    fn from(why: io::Error) -> ReinstallError { ReinstallError::IO { why } }
+    fn from(why: io::Error) -> ReinstallError {
+        ReinstallError::IO { why }
+    }
 }
 
 fn mount_and_then<T, F>(device: &Path, fs: FileSystem, mut action: F) -> Result<T, ReinstallError>

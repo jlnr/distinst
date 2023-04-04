@@ -12,8 +12,8 @@ use std::{
     sync::atomic::Ordering,
 };
 
-use sys_mount::*;
 use crate::NO_EFI_VARIABLES;
+use sys_mount::*;
 
 /// Installation step
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
